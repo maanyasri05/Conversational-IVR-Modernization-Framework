@@ -1,9 +1,10 @@
+import os
 from twilio.rest import Client
 
 print("Starting call script...")
 
-account_sid = "AC52d11d0bdc70730010aa11a203233655"
-auth_token = "d23cc8c08962404079b670c35348cfcc"
+account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
 client = Client(account_sid, auth_token)
 
