@@ -1,38 +1,30 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
-from backend_service import pnr_database, train_database
+
+from intent_engine import detect_intent
+from backend_service import get_pnr_status, get_train_schedule
+from response_formatter import format_pnr_response, format_train_response
 
 app = FastAPI()
 
 
-def speak_time(time_str):
-    hour, minute = map(int, time_str.split(":"))
-    period = "AM"
-    if hour >= 12:
-        period = "PM"
-    hour = hour % 12
-    if hour == 0:
-        hour = 12
-    if minute == 0:
-        return f"{hour} {period}"
-    return f"{hour} {minute} {period}"
-
-
-def speak_seat(seat):
-    if seat is None:
-        return "Seat not assigned"
-    seat = seat.replace("-", " ")
-    return " ".join(list(seat))
-
-
 def menu():
     return """
-    <Gather input="speech" timeout="5" speechTimeout="auto"
-    language="en-IN" action="/twilio-webhook" method="POST">
+    <Gather input="speech"
+    speechTimeout="auto"
+    language="en-IN"
+    hints="pnr, p n r, train number, train schedule"
+    action="/twilio-webhook"
+    method="POST">
+
         <Say>
-        You may say check PNR, train schedule,
-        book ticket, cancel ticket, or end call.
+        You can say check P N R status,
+        check train schedule,
+        book ticket,
+        cancel ticket,
+        or end call.
         </Say>
+
     </Gather>
     """
 
@@ -42,165 +34,167 @@ async def twilio_webhook(request: Request):
 
     form = await request.form()
     speech = form.get("SpeechResult")
-    digits = form.get("Digits")
 
-    if not speech and not digits:
-        twiml = f"""
-        <Response>
-            <Say>Welcome to IRCTC IVR.</Say>
-            {menu()}
-        </Response>
-        """
-        return Response(content=twiml, media_type="application/xml")
+    print("Speech:", speech)
 
-
-    if speech:
-        speech = speech.lower()
-
-        if "end" in speech or "exit" in speech or "bye" in speech:
-            twiml = """
-            <Response>
-                <Say>Thank you for calling IRCTC. Goodbye.</Say>
-                <Hangup/>
-            </Response>
-            """
-            return Response(content=twiml, media_type="application/xml")
-
-
-        if "pnr" in speech:
-            twiml = """
-            <Response>
-                <Gather input="dtmf" numDigits="10"
-                timeout="10" action="/twilio-webhook" method="POST">
-                    <Say>Please enter your ten digit PNR number.</Say>
-                </Gather>
-            </Response>
-            """
-            return Response(content=twiml, media_type="application/xml")
-
-
-        if "train" in speech:
-            twiml = """
-            <Response>
-                <Gather input="dtmf" numDigits="5"
-                timeout="10" action="/twilio-webhook" method="POST">
-                    <Say>Please enter your five digit train number.</Say>
-                </Gather>
-            </Response>
-            """
-            return Response(content=twiml, media_type="application/xml")
-
-
-        if "book" in speech:
-            twiml = f"""
-            <Response>
-                <Say>
-                Ticket booking is available on the IRCTC website
-                or mobile application.
-                </Say>
-                {menu()}
-            </Response>
-            """
-            return Response(content=twiml, media_type="application/xml")
-
-
-        if "cancel" in speech:
-            twiml = f"""
-            <Response>
-                <Say>
-                Your ticket cancellation request has been initiated.
-                </Say>
-                {menu()}
-            </Response>
-            """
-            return Response(content=twiml, media_type="application/xml")
-
+    if not speech:
 
         twiml = f"""
         <Response>
-            <Say>Sorry, I did not understand.</Say>
+            <Say>Welcome to IRCTC voice assistant.</Say>
             {menu()}
         </Response>
         """
+
+        return Response(content=twiml, media_type="application/xml")
+
+    speech = speech.lower()
+    intent = detect_intent(speech)
+
+
+    # END CALL
+    if intent == "END_CALL":
+
+        twiml = """
+        <Response>
+            <Say>Thank you for calling IRCTC. Goodbye.</Say>
+            <Hangup/>
+        </Response>
+        """
+
         return Response(content=twiml, media_type="application/xml")
 
 
-    if digits:
+    # PNR FLOW
+    if intent == "PNR_STATUS":
 
-        if len(digits) == 10:
+        twiml = """
+        <Response>
 
-            if digits in pnr_database:
+            <Gather input="speech"
+            speechTimeout="auto"
+            language="en-IN"
+            hints="zero one two three four five six seven eight nine"
+            action="/process-pnr"
+            method="POST">
 
-                data = pnr_database[digits]
-                seat_text = speak_seat(data["seat"])
+                <Say>Please say your ten digit P N R number.</Say>
 
-                train_parts = data["train"].split(" ", 1)
-                train_number = train_parts[0]
-                train_name = train_parts[1] if len(train_parts) > 1 else ""
+            </Gather>
 
-                twiml = f"""
-                <Response>
-                    <Say>
-                    PNR number
-                    <say-as interpret-as="digits">{digits}</say-as>
-                    is {data["status"]}.
-                    Train number
-                    <say-as interpret-as="digits">{train_number}</say-as>
-                    {train_name}.
-                    Seat {seat_text}.
-                    </Say>
-                    {menu()}
-                </Response>
-                """
+        </Response>
+        """
 
-            else:
-
-                twiml = f"""
-                <Response>
-                    <Say>
-                    PNR number
-                    <say-as interpret-as="digits">{digits}</say-as>
-                    was not found.
-                    </Say>
-                    {menu()}
-                </Response>
-                """
-
-            return Response(content=twiml, media_type="application/xml")
+        return Response(content=twiml, media_type="application/xml")
 
 
-        if len(digits) == 5:
+    # TRAIN FLOW
+    if intent == "TRAIN_SCHEDULE":
 
-            if digits in train_database:
+        twiml = """
+        <Response>
 
-                train = train_database[digits]
-                time_text = speak_time(train["departure"])
+            <Gather input="speech"
+            speechTimeout="auto"
+            language="en-IN"
+            hints="zero one two three four five six seven eight nine"
+            action="/process-train"
+            method="POST">
 
-                twiml = f"""
-                <Response>
-                    <Say>
-                    Train number
-                    <say-as interpret-as="digits">{digits}</say-as>
-                    is {train["name"]}.
-                    Departure time {time_text}.
-                    Platform number
-                    <say-as interpret-as="digits">{train["platform"]}</say-as>.
-                    </Say>
-                    {menu()}
-                </Response>
-                """
+                <Say>Please say your five digit train number.</Say>
 
-            else:
+            </Gather>
 
-                twiml = f"""
-                <Response>
-                    <Say>
-                    Train number
-                    <say-as interpret-as="digits">{digits}</say-as>
-                    was not found.
-                    </Say>
-                    {menu()}
-                </Response>
-                """
+        </Response>
+        """
 
-            return Response(content=twiml, media_type="application/xml")
+        return Response(content=twiml, media_type="application/xml")
+
+
+    # BOOK TICKET
+    if intent == "BOOK_TICKET":
+
+        twiml = f"""
+        <Response>
+            <Say>
+            Ticket booking is available on the IRCTC website
+            or mobile application.
+            </Say>
+            {menu()}
+        </Response>
+        """
+
+        return Response(content=twiml, media_type="application/xml")
+
+
+    # CANCEL TICKET
+    if intent == "CANCEL_TICKET":
+
+        twiml = f"""
+        <Response>
+            <Say>
+            Your ticket cancellation request has been initiated.
+            </Say>
+            {menu()}
+        </Response>
+        """
+
+        return Response(content=twiml, media_type="application/xml")
+
+
+    twiml = f"""
+    <Response>
+        <Say>Sorry I did not understand.</Say>
+        {menu()}
+    </Response>
+    """
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+# PROCESS PNR
+@app.post("/process-pnr")
+async def process_pnr(request: Request):
+
+    form = await request.form()
+    speech = form.get("SpeechResult")
+
+    print("PNR speech:", speech)
+
+    pnr = "".join(filter(str.isdigit, speech))
+
+    data = get_pnr_status(pnr)
+    message = format_pnr_response(data)
+
+    twiml = f"""
+    <Response>
+        <Say>{message}</Say>
+        {menu()}
+    </Response>
+    """
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+# PROCESS TRAIN
+@app.post("/process-train")
+async def process_train(request: Request):
+
+    form = await request.form()
+    speech = form.get("SpeechResult")
+
+    print("Train speech:", speech)
+
+    train = "".join(filter(str.isdigit, speech))
+
+    data = get_train_schedule(train)
+    message = format_train_response(data)
+
+    twiml = f"""
+    <Response>
+        <Say>{message}</Say>
+        {menu()}
+    </Response>
+    """
+
+    return Response(content=twiml, media_type="application/xml")

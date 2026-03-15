@@ -14,28 +14,22 @@ pnr_database = {
 train_database = {
     "12627": {
         "name": "Karnataka Express",
-        "departure": "18:00",
-        "platform": "3"
+        "from": "Delhi",
+        "to": "Bangalore"
     },
     "12002": {
         "name": "Shatabdi Express",
-        "departure": "06:00",
-        "platform": "1"
+        "from": "Delhi",
+        "to": "Chandigarh"
     }
 }
 
 
 def get_pnr_status(pnr):
-    return pnr_database.get(pnr, {
-        "status": "PNR not found",
-        "train": None,
-        "seat": None
-    })
+
+    return pnr_database.get(pnr)
 
 
 def get_train_schedule(train_number):
-    return train_database.get(train_number, {
-        "name": None,
-        "departure": None,
-        "platform": None
-    })
+
+    return train_database.get(train_number)
