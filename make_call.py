@@ -3,7 +3,7 @@ from twilio.rest import Client
 print("Starting call script...")
 
 account_sid = "AC52d11d0bdc70730010aa11a203233655"
-auth_token = "d23cc8c08962404079b670c35348cfcc"
+auth_token = "5220370def648be4869dbe821c316fbb"
 
 client = Client(account_sid, auth_token)
 
