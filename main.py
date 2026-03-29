@@ -8,6 +8,11 @@ from response_formatter import format_pnr_response, format_train_response
 app = FastAPI()
 
 
+@app.get("/")
+def home():
+    return {"message": "IVR system is running successfully"}
+
+
 def menu():
     return """
     <Gather input="speech"
@@ -52,7 +57,6 @@ async def twilio_webhook(request: Request):
     intent = detect_intent(speech)
 
 
-    # END CALL
     if intent == "END_CALL":
 
         twiml = """
@@ -65,53 +69,42 @@ async def twilio_webhook(request: Request):
         return Response(content=twiml, media_type="application/xml")
 
 
-    # PNR FLOW
     if intent == "PNR_STATUS":
 
         twiml = """
         <Response>
-
             <Gather input="speech"
             speechTimeout="auto"
             language="en-IN"
             hints="zero one two three four five six seven eight nine"
             action="/process-pnr"
             method="POST">
-
                 <Say>Please say your ten digit P N R number.</Say>
-
             </Gather>
-
         </Response>
         """
 
         return Response(content=twiml, media_type="application/xml")
 
 
-    # TRAIN FLOW
     if intent == "TRAIN_SCHEDULE":
 
         twiml = """
         <Response>
-
             <Gather input="speech"
             speechTimeout="auto"
             language="en-IN"
             hints="zero one two three four five six seven eight nine"
             action="/process-train"
             method="POST">
-
                 <Say>Please say your five digit train number.</Say>
-
             </Gather>
-
         </Response>
         """
 
         return Response(content=twiml, media_type="application/xml")
 
 
-    # BOOK TICKET
     if intent == "BOOK_TICKET":
 
         twiml = f"""
@@ -127,7 +120,6 @@ async def twilio_webhook(request: Request):
         return Response(content=twiml, media_type="application/xml")
 
 
-    # CANCEL TICKET
     if intent == "CANCEL_TICKET":
 
         twiml = f"""
@@ -152,7 +144,6 @@ async def twilio_webhook(request: Request):
     return Response(content=twiml, media_type="application/xml")
 
 
-# PROCESS PNR
 @app.post("/process-pnr")
 async def process_pnr(request: Request):
 
@@ -176,7 +167,6 @@ async def process_pnr(request: Request):
     return Response(content=twiml, media_type="application/xml")
 
 
-# PROCESS TRAIN
 @app.post("/process-train")
 async def process_train(request: Request):
 
